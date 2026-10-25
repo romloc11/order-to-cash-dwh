@@ -40,11 +40,11 @@ REGIONS = [
 TERMS = [("N030", 30, 0.5), ("N045", 45, 0.3), ("N060", 60, 0.2)]
 # (mean delay in days vs due date, std dev, weight, promise reliability)
 PROFILES = [
-    (-2, 3, 0.15, 0.90),
-    (6, 5, 0.35, 0.80),
-    (18, 8, 0.25, 0.65),
-    (38, 12, 0.17, 0.50),
-    (75, 20, 0.08, 0.35),
+    (-2, 3, 0.32, 0.90),
+    (4, 4, 0.50, 0.80),
+    (18, 8, 0.11, 0.65),
+    (38, 12, 0.05, 0.50),
+    (75, 20, 0.02, 0.35),
 ]
 FIRST = ["Alex", "Maria", "John", "Laura", "Peter", "Sofia", "Daniel", "Elena", "Marco", "Nora",
          "Victor", "Irene", "Oscar", "Julia", "Hugo", "Carla", "Ivan", "Lucia", "Ruben", "Paula"]
@@ -283,7 +283,7 @@ def simulate(cfg: Config, rng: random.Random, customers: list[Customer]):
             ledger.invoices.append(rec)
             settled[idx] = True
             pattern = rng.choices(["single", "lump", "partial", "credit_memo", "on_account"],
-                                  weights=[0.62, 0.14, 0.08, 0.04, 0.12])[0]
+                                  weights=[0.70, 0.12, 0.06, 0.04, 0.08])[0]
 
             if pattern == "lump":
                 group_idx = [idx]
@@ -359,7 +359,7 @@ def simulate(cfg: Config, rng: random.Random, customers: list[Customer]):
                 pattern = "single"
 
             # single and on_account share the same shape; on_account clears later
-            lag = rng.randint(15, 60) if pattern == "on_account" else 0
+            lag = rng.randint(7, 30) if pattern == "on_account" else 0
             clear_date = pay_date + timedelta(days=lag)
             if pay_date <= cfg.as_of:
                 pb = ledger.next_belnr("DZ")
