@@ -1,10 +1,12 @@
 """Generate synthetic source data for the receivables DWH.
 
-Two sources are produced as CSV files:
+Three sources are produced as CSV files:
 
 * ERP, shaped like SAP FI/SD master and transaction tables
   (KNA1, KNVV, KNKK, KNVP, PA0001, T052, T171T, BSID, BSAD, VBRK, CDHDR, CDPOS).
 * CRM, shaped like Odoo (res_users, res_partner, collection_activity).
+* E-commerce (orders, order_holds): web orders, and the pool of orders held because
+  of an ERP block, an exceeded credit limit or an overdue balance.
 
 Everything is random but seeded, so a run is reproducible. Hard cases are
 injected on purpose (partial payments, one payment for several invoices,
@@ -446,6 +448,96 @@ def build_crm(cfg: Config, rng: random.Random, customers: list[Customer], collec
     return users, partners, acts
 
 
+# ---------------------------------------------------------------- e-commerce
+OVERDUE_GRACE_DAYS = 45     # an order is held once an invoice is more than this many days past due
+MAX_HOLD_DAYS = 45
+
+
+def _d(s: str) -> date:
+    return date(int(s[:4]), int(s[4:6]), int(s[6:]))
+
+
+def build_ecommerce(cfg: Config, rng: random.Random, customers: list[Customer], ledger: Ledger):
+    """Web orders, and the pool of orders held for credit reasons.
+
+    Holds are derived from the customer's real state on the order date (credit block,
+    credit limit versus open balance, overdue invoices), so the e-commerce data agrees
+    with the ERP data.
+    """
+    items_by_customer: dict[str, list] = {}
+    for it in ledger.items:
+        signed = float(it["DMBTR"]) * (1 if it["SHKZG"] == "S" else -1)
+        due = _d(it["ZFBDT"]) + timedelta(days=int(it["ZBD1T"])) if it["BLART"] == "RV" else None
+        items_by_customer.setdefault(it["KUNNR"], []).append(
+            (_d(it["BUDAT"]), _d(it["AUGDT"]) if it["AUGDT"] else None, signed, due))
+
+    def state(c: Customer, key, d: date):
+        value = c.initial[key]
+        for cd, t, f, _, new, _ in c.changes:
+            if (t, f) == key and cd <= d:
+                value = new
+        return value
+
+    def reasons(c: Customer, items: list, d: date, total: float) -> list[str]:
+        out = []
+        if state(c, ("KNKK", "CRBLB"), d) == "X":
+            out.append("ERP_BLOCK")
+        balance = sum(s for b, a, s, _ in items if b <= d and (a is None or a > d))
+        if balance + total > state(c, ("KNKK", "KLIMK"), d):
+            out.append("CREDIT_LIMIT")
+        if any(due is not None and b <= d and (a is None or a > d) and (d - due).days > OVERDUE_GRACE_DAYS
+               for b, a, s, due in items):
+            out.append("OVERDUE_BALANCE")
+        return out
+
+    orders, holds = [], []
+    oid = hid = 0
+    for c in customers:
+        if c.channel == "20" or rng.random() > 0.6:      # not every customer buys on the web
+            continue
+        items = items_by_customer.get(c.kunnr, [])
+        rate = rng.uniform(0.5, 3.0)
+        first = max(c.created, cfg.start)
+        for off in range((cfg.as_of - first).days + 1):
+            d = first + timedelta(days=off)
+            for _ in range(poisson(rng, rate / 30)):
+                oid += 1
+                total = money(min(80_000, max(150, rng.lognormvariate(math.log(5000), 0.8) * c.size)))
+                created = datetime.combine(d, datetime.min.time()) + timedelta(
+                    hours=rng.randint(7, 22), minutes=rng.randint(0, 59))
+                why = reasons(c, items, d, total)
+                status, updated, released, release_type = "confirmed", created, None, None
+                if why:
+                    candidates = sorted({a for _, a, _, _ in items if a and d < a <= d + timedelta(days=MAX_HOLD_DAYS)}
+                                        | {cd for cd, *_ in c.changes if d < cd <= d + timedelta(days=MAX_HOLD_DAYS)})
+                    candidates = [x for x in candidates if x <= cfg.as_of]
+                    release_day = next((x for x in candidates if not reasons(c, items, x, total)), None)
+                    release_type = "auto"
+                    if release_day is None:
+                        if d + timedelta(days=MAX_HOLD_DAYS) > cfg.as_of:
+                            status, release_type = "held", None          # still in the pool today
+                        elif rng.random() < 0.45:
+                            release_day, release_type = d + timedelta(days=rng.randint(3, 20)), "manual"
+                        else:
+                            release_day, release_type = d + timedelta(days=rng.randint(10, MAX_HOLD_DAYS)), "cancelled"
+                    if release_day is not None and release_day <= cfg.as_of:
+                        released = datetime.combine(release_day, datetime.min.time()) + timedelta(
+                            hours=rng.randint(8, 18), minutes=rng.randint(0, 59))
+                        status = "cancelled" if release_type == "cancelled" else "confirmed"
+                        updated = released
+                    elif release_day is not None:
+                        status, release_type = "held", None
+                fmt = "%Y-%m-%d %H:%M:%S"
+                orders.append([oid, f"WEB-{oid:06d}", c.kunnr.lstrip("0"), created.strftime(fmt), status,
+                               f"{total:.2f}", CURRENCY, updated.strftime(fmt)])
+                for reason in why:
+                    hid += 1
+                    holds.append([hid, oid, reason, created.strftime(fmt),
+                                  released.strftime(fmt) if released else "", release_type or "",
+                                  updated.strftime(fmt)])
+    return orders, holds
+
+
 # ---------------------------------------------------------------- main
 def run(cfg: Config, out: Path) -> dict:
     rng = random.Random(cfg.seed)
@@ -462,6 +554,7 @@ def run(cfg: Config, out: Path) -> dict:
     customers = build_customers(rng, cfg, collectors)
     ledger, billing, act_input = simulate(cfg, rng, customers)
     users, partners, acts = build_crm(cfg, rng, customers, collectors, names, act_input)
+    orders, holds = build_ecommerce(cfg, rng, customers, ledger)
 
     erp = out / "erp"
     kna1, knvv, knkk, knvp, cdhdr, cdpos = [], [], [], [], [], []
@@ -508,6 +601,12 @@ def run(cfg: Config, out: Path) -> dict:
                                                 "promised_date", "promised_amount", "note", "user_id",
                                                 "create_date", "write_date"], acts)
 
+    shop = out / "ecommerce"
+    write_csv(shop / "orders.csv", ["id", "order_number", "customer_ref", "created_at", "status",
+                                    "total_amount", "currency", "updated_at"], orders)
+    write_csv(shop / "order_holds.csv", ["id", "order_id", "reason", "held_at", "released_at",
+                                         "release_type", "updated_at"], holds)
+
     truth = out / "truth"
     hist = []
     for c in customers:
@@ -527,7 +626,9 @@ def run(cfg: Config, out: Path) -> dict:
 
     return {"customers": len(customers), "invoices": len(ledger.invoices), "open_items": len(open_items),
             "cleared_items": len(cleared), "cdhdr": len(cdhdr), "activities": len(acts),
-            "partners": len(partners), "truth_applications": len(ledger.applications)}
+            "partners": len(partners), "truth_applications": len(ledger.applications),
+            "web_orders": len(orders), "order_holds": len(holds),
+            "orders_held_now": sum(1 for o in orders if o[4] == "held")}
 
 
 def main() -> None:

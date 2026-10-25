@@ -68,6 +68,27 @@ services:
       timeout: 5s
       retries: 20
 
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_DATABASE: ecommerce
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-shop_local_dev}
+    ports:
+      - "3306:3306"
+    volumes:
+      - maria-data:/var/lib/mysql
+      - ./sql/ecommerce_source:/docker-entrypoint-initdb.d:ro
+      - ./data_generator/output:/seed:ro
+    depends_on:
+      generator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   mssql-data:
   pg-data:
+  maria-data:
