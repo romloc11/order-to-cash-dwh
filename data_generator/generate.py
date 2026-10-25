@@ -449,7 +449,7 @@ def build_crm(cfg: Config, rng: random.Random, customers: list[Customer], collec
 
 
 # ---------------------------------------------------------------- e-commerce
-OVERDUE_GRACE_DAYS = 45     # an order is held once an invoice is more than this many days past due
+OVERDUE_GRACE_DAYS = 15    # an order is held once an invoice is more than this many days past due
 MAX_HOLD_DAYS = 45
 
 
