@@ -57,7 +57,8 @@ python -m data_generator.generate --customers 500 --seed 42 --out data_generator
 ## Roadmap
 
 - [x] Synthetic data generator (ERP, CRM, e-commerce) and source databases
-- [ ] Control layer and Bronze loads (ERP in T-SQL, CRM and e-commerce in Python)
+- [x] Control layer and Bronze load for the ERP (T-SQL)
+- [ ] Bronze extractors for the CRM and e-commerce (Python)
 - [ ] Silver
 - [ ] Gold: dimensions (SCD2), facts, payment application, analysis views
 - [ ] Data quality and tests
