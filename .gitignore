@@ -1,0 +1,14 @@
+# generated data
+data_generator/output/
+*.csv.bak
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# local config and tooling
+.env
+.claude/
+*.log

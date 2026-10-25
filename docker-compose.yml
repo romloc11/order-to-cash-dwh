@@ -1,0 +1,73 @@
+name: receivables-dwh
+
+# Source systems for the warehouse, plus the warehouse engine itself.
+#   generator   -> writes synthetic CSV files to ./data_generator/output
+#   sqlserver   -> the warehouse (and the simulated ERP source database, erp_source)
+#   erp-loader  -> creates and fills erp_source from the CSV files
+#   postgres    -> the simulated CRM source (loaded on first start)
+
+services:
+  generator:
+    build:
+      context: .
+      dockerfile: data_generator/Dockerfile
+    volumes:
+      - ./data_generator/output:/out
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Dwh_Local_Dev_1}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./data_generator/output:/seed:ro
+    depends_on:
+      generator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  erp-loader:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./sql:/sql:ro
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - /opt/mssql-tools18/bin/sqlcmd -C -b -S sqlserver -U sa -P "${MSSQL_SA_PASSWORD:-Dwh_Local_Dev_1}" -i /sql/erp_source/01_create_and_load.sql
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm_local_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./sql/crm_source:/docker-entrypoint-initdb.d:ro
+      - ./data_generator/output:/seed:ro
+    depends_on:
+      generator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mssql-data:
+  pg-data:
