@@ -68,6 +68,31 @@ services:
         done
     restart: "no"
 
+  # Python extractors. Not started by `docker compose up`; run on demand:
+  #   docker compose run --rm extractors python -m extractors.ecommerce
+  # ./extractors is mounted, so you edit on your machine and the container runs your latest code.
+  extractors:
+    build:
+      context: .
+      dockerfile: extractors/Dockerfile
+    profiles: ["tools"]
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Dwh_Local_Dev_1}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-shop_local_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm_local_dev}
+      DWH_HOST: sqlserver
+      SHOP_HOST: mariadb
+      CRM_HOST: postgres
+    volumes:
+      - ./extractors:/app/extractors
+    depends_on:
+      dwh-setup:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     environment:
