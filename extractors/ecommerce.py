@@ -48,9 +48,10 @@ def read_source(src, table: str, columns: list[str], mark):
 
 def main() -> None:
     run = common.Run(PROCESS)
-    src = source_connection()
+    src = None                                         # opened inside the try, so a failure to connect is logged
     total = 0
     try:
+        src = source_connection()
         for source_table, bronze_table, columns, keys in TABLES:
             started = common.utc_now()
             mark = common.watermark(run.cursor, bronze_table, "updated_at", LOOKBACK)
@@ -66,7 +67,8 @@ def main() -> None:
         run.fail(exc)
         raise
     finally:
-        src.close()
+        if src is not None:
+            src.close()
         run.close()
 
 
