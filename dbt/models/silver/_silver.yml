@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: erp_customers                  # nombre de tu modelo (el del archivo .sql, sin la extensión)
+    description: Una fila por cuenta de cliente del ERP, limpia, desde bronze.erp_kna1.
+    columns:
+      - name: customer_id
+        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        data_tests:
+          - unique
+          - not_null
+      - name: account_group
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [CUST, DELV]
