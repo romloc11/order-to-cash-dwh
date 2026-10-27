@@ -1,3 +1,4 @@
+
 select
     try_cast(KUNNR as int) as customer_id,
     NAME1 as customer_name,
