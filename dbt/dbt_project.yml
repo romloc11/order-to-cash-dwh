@@ -1,0 +1,23 @@
+name: receivables_dwh
+version: "1.0.0"
+config-version: 2
+
+# Which entry of profiles.yml to use. It must match the top-level key in your profiles.yml.
+profile: receivables_dwh
+
+# Where dbt looks for each kind of file (all relative to this folder).
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+
+clean-targets: ["target", "dbt_packages"]
+
+# Defaults per folder. `silver` and `gold` mirror the medallion layers.
+models:
+  receivables_dwh:
+    silver:
+      +materialized: view
+    gold:
+      +materialized: table

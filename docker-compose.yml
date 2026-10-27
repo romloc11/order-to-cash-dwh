@@ -93,6 +93,22 @@ services:
       postgres:
         condition: service_healthy
 
+  # dbt, for the silver and gold layers. Run on demand, for example:
+  #   docker compose run --rm dbt debug
+  # ./dbt is mounted, so you edit on your machine and the container runs your latest files.
+  dbt:
+    build:
+      context: .
+      dockerfile: dbt/Dockerfile
+    profiles: ["tools"]
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Dwh_Local_Dev_1}
+    volumes:
+      - ./dbt:/usr/app/dbt
+    depends_on:
+      dwh-setup:
+        condition: service_completed_successfully
+
   postgres:
     image: postgres:16-alpine
     environment:
