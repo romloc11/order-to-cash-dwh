@@ -6,3 +6,6 @@ sources:
     schema: bronze
     tables:
       - name: erp_kna1
+      - name: erp_knkk
+      - name: crm_res_partner
+      - name: ecommerce_orders

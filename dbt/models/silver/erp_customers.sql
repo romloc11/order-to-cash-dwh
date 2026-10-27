@@ -1,8 +1,8 @@
 
-select
-    try_cast(KUNNR as int) as customer_id,
-    NAME1 as customer_name,
-    nullif(ltrim(rtrim(STCD1)), '') as tax_id,
-    KTOKD as account_group,
-    try_convert(date, ERDAT, 112) as created_date
-from {{ source('bronze', 'erp_kna1') }}
+SELECT
+    TRY_CAST(KUNNR AS INT) AS customer_id,
+    NAME1 AS customer_name,
+    NULLIF(LTRIM(RTRIM(STCD1)), '') AS tax_id,
+    KTOKD AS account_group,
+    TRY_CONVERT(DATE, ERDAT, 112) AS created_date
+FROM {{ source('bronze', 'erp_kna1') }}

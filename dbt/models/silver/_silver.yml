@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: erp_customers                  # nombre de tu modelo (el del archivo .sql, sin la extensión)
+  - name: erp_customers
     description: Una fila por cuenta de cliente del ERP, limpia, desde bronze.erp_kna1.
     columns:
       - name: customer_id
@@ -14,3 +14,46 @@ models:
           - accepted_values:
               arguments:
                 values: [CUST, DELV]
+  - name: erp_customer_credit
+    description: Una fila por cuenta de cliente del ERP, con su límite de crédito y si está bloqueada o no, desde bronze.erp_knkk.
+    columns:
+      - name: customer_id
+        description: ID del cliente en el ERP.
+        data_tests:
+          - unique
+          - not_null
+      - name: is_credit_blocked
+        description: Indica si el cliente tiene el crédito bloqueado.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+  - name: crm_partners
+    description: Una fila por cuenta de cliente del CRM, limpia, desde bronze.crm_res_partner.
+    columns:
+      - name: partner_id
+        description: ID del cliente en el CRM.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('erp_customers')
+                field: customer_id
+  - name: ecommerce_orders
+    description: Una fila por pedido de e-commerce, limpia, desde bronze.ecommerce_orders.
+    columns:
+      - name: order_id
+        description: ID del pedido en el sistema de e-commerce.
+        data_tests:
+          - unique
+          - not_null
+      - name: status
+        description: Estado del pedido.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [confirmed, held, cancelled]
+            
