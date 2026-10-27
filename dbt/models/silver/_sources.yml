@@ -7,5 +7,18 @@ sources:
     tables:
       - name: erp_kna1
       - name: erp_knkk
+      - name: erp_knvv
+      - name: erp_knvp
+      - name: erp_pa0001
+      - name: erp_t052
+      - name: erp_t171t
+      - name: erp_bsid
+      - name: erp_bsad
+      - name: erp_vbrk
+      - name: erp_cdhdr
+      - name: erp_cdpos
+      - name: crm_res_users
       - name: crm_res_partner
+      - name: crm_collection_activity
       - name: ecommerce_orders
+      - name: ecommerce_order_holds

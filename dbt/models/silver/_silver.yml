@@ -56,4 +56,118 @@ models:
           - accepted_values:
               arguments:
                 values: [confirmed, held, cancelled]
-            
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('erp_customers')
+                field: customer_id
+  - name: ecommerce_order_holds
+    description: Una fila por retención de pedido. released_at nulo significa retención activa.
+    columns:
+      - name: hold_id
+        data_tests:
+          - unique
+          - not_null
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('ecommerce_orders')
+                field: order_id
+      - name: hold_reason
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [ERP_BLOCK, CREDIT_LIMIT, OVERDUE_BALANCE]
+  - name: erp_billing
+    description: Una fila por factura emitida (VBRK).
+    columns:
+      - name: billing_doc
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('erp_customers')
+                field: customer_id
+  - name: erp_open_items
+    description: Partidas abiertas de clientes (BSID). El importe siempre es positivo; debit_credit da la dirección.
+    columns:
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('erp_customers')
+                field: customer_id
+      - name: debit_credit
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [S, H]
+  - name: erp_cleared_items
+    description: Partidas compensadas de clientes (BSAD), con fecha y documento de compensación.
+    columns:
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('erp_customers')
+                field: customer_id
+      - name: debit_credit
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [S, H]
+      - name: clearing_document
+        data_tests:
+          - not_null
+  - name: erp_change_headers
+    description: Encabezados de la bitácora de cambios de clientes (CDHDR).
+    columns:
+      - name: customer_id
+        data_tests:
+          - not_null
+  - name: erp_change_items
+    description: Detalle de la bitácora de cambios (CDPOS), campo por campo.
+    columns:
+      - name: field_name
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [CRBLB, KLIMK, PERNR, BZIRK]
+  - name: erp_payment_terms
+    columns:
+      - name: payment_terms_code
+        data_tests:
+          - unique
+          - not_null
+  - name: erp_employees
+    columns:
+      - name: employee_id
+        data_tests:
+          - unique
+          - not_null
+  - name: crm_users
+    columns:
+      - name: user_id
+        data_tests:
+          - unique
+          - not_null
+  - name: crm_collection_activities
+    columns:
+      - name: activity_id
+        data_tests:
+          - unique
+          - not_null
+      - name: partner_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('crm_partners')
+                field: partner_id
