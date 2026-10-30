@@ -42,3 +42,37 @@ models:
           - accepted_values:
               arguments:
                 values: [0, 1]
+  - name: fact_invoice
+    description: Una fila por factura, con cliente, fecha, importe y moneda.
+    columns:
+      - name: invoice_doc
+        description: Número de documento de la factura en el ERP.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+      - name: invoice_date
+        description: Fecha de la factura.
+        data_tests:
+          - not_null
+      - name: invoice_amount
+        description: Importe total de la factura en la moneda original.
+        data_tests:
+          - not_null
+      - name: currency
+        description: Código de moneda de la factura (ISO 4217).
+        data_tests:
+          - not_null
+      - name: aging_bucket
+        description: Categoría de antigüedad de la factura según su fecha y la fecha de corte.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['cleared', 'not_due', '1-15', '16-30', '31-60', '60+']

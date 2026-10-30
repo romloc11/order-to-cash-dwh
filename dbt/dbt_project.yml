@@ -23,3 +23,6 @@ models:
     gold:
       +materialized: table
       +schema: gold
+
+vars:
+  as_of_date: "2026-06-30"
