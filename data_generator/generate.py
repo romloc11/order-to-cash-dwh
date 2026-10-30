@@ -10,7 +10,7 @@ Three sources are produced as CSV files:
 
 Everything is random but seeded, so a run is reproducible. Hard cases are
 injected on purpose (partial payments, one payment for several invoices,
-credit memos, payments cleared weeks later, payments that never clear,
+several payments for several invoices, credit memos, payments cleared weeks later, payments that never clear,
 customer attributes that change over time and are only partly logged).
 
 A ``truth/`` folder is also written. It is never loaded into the warehouse; the
@@ -538,6 +538,77 @@ def build_ecommerce(cfg: Config, rng: random.Random, customers: list[Customer], 
     return orders, holds
 
 
+# ------------------------------------------------- several payments, several invoices
+def add_multi_payment_groups(cfg: Config, customers: list[Customer], ledger: Ledger, billing: list) -> int:
+    """Some customers settle 3-5 invoices with 2-3 payments, all cleared together.
+
+    SAP only records that the documents were cleared together, not which payment covered
+    which invoice. The truth file applies payments to invoices oldest-due first (a waterfall),
+    which is the rule the warehouse has to infer.
+
+    Runs after the CRM and e-commerce sources are built and uses its own random stream, so
+    adding it does not change anything generated before. The new invoices therefore have no
+    CRM activities and are not seen by the e-commerce holds; they only live in the ERP.
+    """
+    rng = random.Random(cfg.seed + 1)
+    groups = 0
+    for c in customers:
+        if rng.random() >= 0.06:
+            continue
+        first_day = max(c.created, cfg.start)
+        latest_start = cfg.as_of - timedelta(days=150)
+        if latest_start <= first_day:
+            continue
+        for _ in range(rng.randint(1, 2)):
+            start = first_day + timedelta(days=rng.randint(0, (latest_start - first_day).days))
+            n_inv, n_pay = rng.randint(3, 5), rng.randint(2, 3)
+            inv_dates = sorted(start + timedelta(days=rng.randint(0, 40)) for _ in range(n_inv))
+            amounts = [int(round(min(200_000, max(300, rng.lognormvariate(math.log(9000), 0.9) * c.size)) * 100))
+                       for _ in range(n_inv)]
+            total = sum(amounts)
+            shares = [rng.random() + 0.5 for _ in range(n_pay)]
+            pays = [int(total * s / sum(shares)) for s in shares[:-1]]
+            pays.append(total - sum(pays))
+            pay_dates = [inv_dates[-1] + timedelta(days=c.terms_days + rng.randint(0, 20))]
+            for _ in range(n_pay - 1):
+                pay_dates.append(pay_dates[-1] + timedelta(days=rng.randint(5, 25)))
+            if pay_dates[-1] > cfg.as_of:
+                continue
+
+            inv_items, inv_recs = [], []
+            for d, cents in zip(inv_dates, amounts):
+                vbeln, belnr = ledger.next_vbeln(), ledger.next_belnr("RV")
+                amt = cents / 100
+                inv_items.append(ledger.add(c, belnr, d, "RV", "S", amt, d, c.terms_days, vbeln=vbeln, xblnr=vbeln))
+                billing.append([MANDT, vbeln, "F2", ymd(d), c.kunnr, f"{amt:.2f}", CURRENCY])
+                rec = {"belnr": belnr, "vbeln": vbeln, "date": d, "due": d + timedelta(days=c.terms_days),
+                       "amount": amt, "paid_on": None, "customer": c}
+                ledger.invoices.append(rec)
+                inv_recs.append(rec)
+            pay_items = []
+            for d, cents in zip(pay_dates, pays):
+                pay_items.append(ledger.add(c, ledger.next_belnr("DZ"), d, "DZ", "H", cents / 100, d, 0))
+            ledger.clear(inv_items + pay_items, pay_dates[-1], pay_items[-1]["BELNR"])
+
+            # truth: waterfall, invoices by due date and payments by date, in cents
+            i, p = 0, 0
+            inv_left, pay_left = amounts[0], pays[0]
+            while i < n_inv and p < n_pay:
+                part = min(inv_left, pay_left)
+                ledger.applications.append([pay_items[p]["BELNR"], inv_recs[i]["belnr"], f"{part / 100:.2f}"])
+                inv_recs[i]["paid_on"] = pay_dates[p]
+                inv_left -= part
+                pay_left -= part
+                if inv_left == 0:
+                    i += 1
+                    inv_left = amounts[i] if i < n_inv else 0
+                if pay_left == 0:
+                    p += 1
+                    pay_left = pays[p] if p < n_pay else 0
+            groups += 1
+    return groups
+
+
 # ---------------------------------------------------------------- main
 def run(cfg: Config, out: Path) -> dict:
     rng = random.Random(cfg.seed)
@@ -555,6 +626,7 @@ def run(cfg: Config, out: Path) -> dict:
     ledger, billing, act_input = simulate(cfg, rng, customers)
     users, partners, acts = build_crm(cfg, rng, customers, collectors, names, act_input)
     orders, holds = build_ecommerce(cfg, rng, customers, ledger)
+    multi_groups = add_multi_payment_groups(cfg, customers, ledger, billing)
 
     erp = out / "erp"
     kna1, knvv, knkk, knvp, cdhdr, cdpos = [], [], [], [], [], []
@@ -626,7 +698,8 @@ def run(cfg: Config, out: Path) -> dict:
 
     return {"customers": len(customers), "invoices": len(ledger.invoices), "open_items": len(open_items),
             "cleared_items": len(cleared), "cdhdr": len(cdhdr), "activities": len(acts),
-            "partners": len(partners), "truth_applications": len(ledger.applications),
+            "partners": len(partners), "multi_groups": multi_groups,
+            "truth_applications": len(ledger.applications),
             "web_orders": len(orders), "order_holds": len(holds),
             "orders_held_now": sum(1 for o in orders if o[4] == "held")}
 
