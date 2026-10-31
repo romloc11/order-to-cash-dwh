@@ -76,3 +76,94 @@ models:
           - accepted_values:
               arguments:
                 values: ['cleared', 'not_due', '1-15', '16-30', '31-60', '60+']
+  - name: fact_credit_memo
+    description: Una fila por nota de crédito, con cliente, fecha, importe y moneda.
+    columns:
+      - name: credit_memo_doc
+        description: Número de documento de la nota de crédito en el ERP.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+      - name: credit_memo_date
+        description: Fecha de la nota de crédito.
+        data_tests:
+          - not_null
+      - name: credit_memo_amount
+        description: Importe total de la nota de crédito en la moneda original.
+        data_tests:
+          - not_null
+      - name: currency
+        description: Código de moneda de la nota de crédito (ISO 4217).
+        data_tests:
+          - not_null
+      - name: billing_doc
+        description: Número de documento de facturación asociado a la nota de crédito.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_invoice')
+                field: billing_doc
+  - name: fact_payment
+    description: Una fila por pago.
+    columns:
+      - name: payment_doc
+        description: Número de documento del pago en el ERP.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+      - name: payment_date
+        description: Fecha del pago.
+        data_tests:
+          - not_null
+      - name: payment_amount
+        description: Importe total del pago en la moneda original.
+        data_tests:
+          - not_null
+      - name: currency
+        description: Código de moneda del pago (ISO 4217).
+        data_tests:
+          - not_null
+  - name: bridge_payment_application
+    description: Una fila por aplicación de pago a factura o nota de crédito, con el documento de compensación.
+    columns:
+      - name: application_doc
+        description: Número de documento de compensación en el ERP.
+        data_tests:
+          - not_null
+      - name: invoice_doc
+        description: Número de documento de la factura aplicada al pago.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_invoice')
+                field: invoice_doc
+      - name: application_type
+        description: Tipo de aplicación (factura o nota de crédito).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['payment', 'credit_memo']
+      - name: application_rule
+        description: Regla utilizada para determinar la aplicación del pago (one_invoice, one_payment, etc.).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [one_invoice, one_payment, credit_memo, waterfall]
