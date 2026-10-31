@@ -546,9 +546,10 @@ def add_multi_payment_groups(cfg: Config, customers: list[Customer], ledger: Led
     which invoice. The truth file applies payments to invoices oldest-due first (a waterfall),
     which is the rule the warehouse has to infer.
 
-    Runs after the CRM and e-commerce sources are built and uses its own random stream, so
-    adding it does not change anything generated before. The new invoices therefore have no
-    CRM activities and are not seen by the e-commerce holds; they only live in the ERP.
+    Runs after the CRM is built and before the e-commerce orders, and uses its own random
+    stream, so the ERP and CRM output of the other patterns does not change. The e-commerce
+    holds do see these invoices, so web orders agree with the ledger. The new invoices have
+    no CRM activities.
     """
     rng = random.Random(cfg.seed + 1)
     groups = 0
@@ -625,8 +626,8 @@ def run(cfg: Config, out: Path) -> dict:
     customers = build_customers(rng, cfg, collectors)
     ledger, billing, act_input = simulate(cfg, rng, customers)
     users, partners, acts = build_crm(cfg, rng, customers, collectors, names, act_input)
-    orders, holds = build_ecommerce(cfg, rng, customers, ledger)
     multi_groups = add_multi_payment_groups(cfg, customers, ledger, billing)
+    orders, holds = build_ecommerce(cfg, rng, customers, ledger)
 
     erp = out / "erp"
     kna1, knvv, knkk, knvp, cdhdr, cdpos = [], [], [], [], [], []
