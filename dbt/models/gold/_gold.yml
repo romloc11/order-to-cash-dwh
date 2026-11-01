@@ -167,3 +167,52 @@ models:
           - accepted_values:
               arguments:
                 values: [one_invoice, one_payment, credit_memo, waterfall]
+  - name: dim_date
+    description: Una fila por fecha
+    columns:
+      - name: date_day
+        description: Día de la fecha.
+        data_tests:
+          - not_null
+          - unique
+      - name: is_month_end
+        description: flag para saber si es el ultimo dia del mes
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+  - name: fact_ar_snapshot
+    description: una fila por cliente y fecha con los datos de la cartera del cliente en ese momento
+    columns:
+      - name: customer_id
+        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+      - name: snapshot_date
+        description: fecha del snapshot
+        data_tests:
+          - not_null
+      - name: credit_limit
+        description: limite de credito del cleinte en el dia del snapshot
+        data_tests:
+          - not_null
+  - name: fact_web_order
+    description: Una fila por pedido del e-commerce, con el saldo del cliente ese día y las retenciones aplicadas.
+    columns:
+      - name: order_id
+        description: Identificador del pedido en el e-commerce.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id

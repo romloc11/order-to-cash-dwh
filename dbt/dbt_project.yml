@@ -24,5 +24,13 @@ models:
       +materialized: table
       +schema: gold
 
+
+data_tests:
+  +store_failures: true
+  +schema: dq
+
+
 vars:
   as_of_date: "2026-06-30"
+  start_date: "2023-07-01"
+  
