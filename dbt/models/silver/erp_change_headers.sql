@@ -5,7 +5,7 @@ select
     try_cast(rtrim(OBJECTID) as int) as customer_id,
     CHANGENR as change_number,
     rtrim(USERNAME) as changed_by,
-    try_convert(date, UDATE, 112) as change_date,
+    {{ sap_date('UDATE') }} as change_date,
     UTIME as change_time,
     rtrim(TCODE) as transaction_code
 from {{ source('bronze', 'erp_cdhdr') }}

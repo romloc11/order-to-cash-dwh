@@ -2,10 +2,10 @@ version: 2
 
 models:
   - name: erp_customers
-    description: Una fila por cuenta de cliente del ERP, limpia, desde bronze.erp_kna1.
+    description: One row per ERP customer account, cleaned, from bronze.erp_kna1.
     columns:
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - unique
           - not_null
@@ -15,24 +15,24 @@ models:
               arguments:
                 values: [CUST, DELV]
   - name: erp_customer_credit
-    description: Una fila por cuenta de cliente del ERP, con su límite de crédito y si está bloqueada o no, desde bronze.erp_knkk.
+    description: One row per ERP customer account, with its credit limit and whether credit is blocked, from bronze.erp_knkk.
     columns:
       - name: customer_id
-        description: ID del cliente en el ERP.
+        description: Customer ID in the ERP.
         data_tests:
           - unique
           - not_null
       - name: is_credit_blocked
-        description: Indica si el cliente tiene el crédito bloqueado.
+        description: 1 if the customer's credit is blocked, 0 otherwise.
         data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]
   - name: crm_partners
-    description: Una fila por cuenta de cliente del CRM, limpia, desde bronze.crm_res_partner.
+    description: One row per CRM customer account, cleaned, from bronze.crm_res_partner.
     columns:
       - name: partner_id
-        description: ID del cliente en el CRM.
+        description: Customer ID in the CRM.
         data_tests:
           - unique
           - not_null
@@ -43,15 +43,15 @@ models:
                 to: ref('erp_customers')
                 field: customer_id
   - name: ecommerce_orders
-    description: Una fila por pedido de e-commerce, limpia, desde bronze.ecommerce_orders.
+    description: One row per e-commerce order, cleaned, from bronze.ecommerce_orders.
     columns:
       - name: order_id
-        description: ID del pedido en el sistema de e-commerce.
+        description: Order ID in the e-commerce system.
         data_tests:
           - unique
           - not_null
       - name: status
-        description: Estado del pedido.
+        description: Order status, confirmed, held or cancelled.
         data_tests:
           - accepted_values:
               arguments:
@@ -64,7 +64,7 @@ models:
                 to: ref('erp_customers')
                 field: customer_id
   - name: ecommerce_order_holds
-    description: Una fila por retención de pedido. released_at nulo significa retención activa.
+    description: One row per order hold. A NULL released_at means the hold is still active.
     columns:
       - name: hold_id
         data_tests:
@@ -82,7 +82,7 @@ models:
               arguments:
                 values: [ERP_BLOCK, CREDIT_LIMIT, OVERDUE_BALANCE]
   - name: erp_billing
-    description: Una fila por factura emitida (VBRK).
+    description: One row per issued invoice (VBRK).
     columns:
       - name: billing_doc
         data_tests:
@@ -95,7 +95,7 @@ models:
                 to: ref('erp_customers')
                 field: customer_id
   - name: erp_open_items
-    description: Partidas abiertas de clientes (BSID). El importe siempre es positivo; debit_credit da la dirección.
+    description: Open customer items (BSID). The amount is always positive; debit_credit gives the direction.
     columns:
       - name: customer_id
         data_tests:
@@ -110,7 +110,7 @@ models:
               arguments:
                 values: [S, H]
   - name: erp_cleared_items
-    description: Partidas compensadas de clientes (BSAD), con fecha y documento de compensación.
+    description: Cleared customer items (BSAD), with clearing date and clearing document.
     columns:
       - name: customer_id
         data_tests:
@@ -128,13 +128,13 @@ models:
         data_tests:
           - not_null
   - name: erp_change_headers
-    description: Encabezados de la bitácora de cambios de clientes (CDHDR).
+    description: Customer change log headers (CDHDR).
     columns:
       - name: customer_id
         data_tests:
           - not_null
   - name: erp_change_items
-    description: Detalle de la bitácora de cambios (CDPOS), campo por campo.
+    description: Change log items (CDPOS), field by field.
     columns:
       - name: field_name
         data_tests:

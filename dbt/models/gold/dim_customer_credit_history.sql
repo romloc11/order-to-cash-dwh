@@ -1,5 +1,5 @@
 WITH changes AS (
-    -- Paso 1: un renglón por cambio de límite, ya con fecha y valores numéricos
+    -- Step 1: one row per credit limit change, with the date and numeric values
     SELECT
         h.customer_id,
         h.change_date,
@@ -14,7 +14,7 @@ WITH changes AS (
 ),
 
 initial_version AS (
-    -- Paso 2: la versión que existía ANTES del primer cambio
+    -- Step 2: the version that existed BEFORE the first change
     SELECT
         customer_id,
         old_limit AS credit_limit,
@@ -25,7 +25,7 @@ initial_version AS (
 ),
 
 change_versions AS (
-    -- Paso 3: la versión que empieza en cada cambio
+    -- Step 3: the version that starts at each change
     SELECT
         customer_id,
         new_limit AS credit_limit,
@@ -36,7 +36,7 @@ change_versions AS (
 ),
 
 never_changed AS (
-    -- Paso 4: clientes sin cambios en la bitácora: una sola versión, su límite actual
+    -- Step 4: customers with no changes in the change log: a single version, their current limit
     SELECT
         customer_id,
         credit_limit,

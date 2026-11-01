@@ -2,56 +2,74 @@ version: 2
 
 models:
   - name: dim_customer
-    description: Una fila por cliente, con crédito, plazo de pago, distrito y cobrador.
+    description: One row per customer, with credit, payment terms, district and collector.
     columns:
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - unique
           - not_null
-      - name: collector_name
-        description: Nombre del cobrador asignado al cliente, desde erp_employees.
+      - name: customer_name
+        description: Customer name as held in the ERP today.
+      - name: tax_id
+        description: Customer tax ID. NULL when the ERP has none.
+      - name: is_delivery_account
+        description: 1 if the account is a delivery-only account (account group DELV), 0 if it is a regular customer account.
+      - name: credit_limit
+        description: Current credit limit. For the limit in force on a past date, use dim_customer_credit_history.
+      - name: is_credit_blocked
+        description: 1 if the customer's credit is blocked in the ERP today, 0 otherwise.
+      - name: risk_class
+        description: Credit risk class assigned to the customer in the ERP.
+      - name: payment_terms_days
+        description: Days allowed to pay an invoice, from erp_payment_terms.
         data_tests:
           - not_null
-      - name: payment_terms_days
-        description: Días de plazo de pago del cliente, desde erp_payment_terms.
+      - name: district_name
+        description: Sales district the customer belongs to.
+      - name: collector_name
+        description: Name of the collector assigned to the customer, from erp_employees.
         data_tests:
           - not_null
   - name: dim_customer_credit_history
-    description: Una fila por cliente y versión de crédito, con fecha de vigencia (SCD2).
+    description: One row per customer and credit limit version, with validity dates (SCD2).
     columns:
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_customer')
                 field: customer_id
+      - name: credit_limit
+        description: Credit limit in force during the validity period.
       - name: valid_from
-        description: Fecha desde la cual es válida la versión de crédito.
+        description: First day the credit limit version is valid (inclusive).
         data_tests:
           - not_null
       - name: valid_to
-        description: Fecha hasta la cual es válida la versión de crédito.
+        description: Day the credit limit version stops being valid (exclusive). 9999-12-31 for the current version.
         data_tests:
           - not_null
       - name: is_current
-        description: Indica si la versión de crédito es la actual (1) o no (0).
+        description: 1 if this is the current credit limit version, 0 otherwise.
         data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]
   - name: fact_invoice
-    description: Una fila por factura, con cliente, fecha, importe y moneda.
+    description: One row per invoice, with customer, dates, amounts, payment status and aging.
     columns:
       - name: invoice_doc
-        description: Número de documento de la factura en el ERP.
+        description: ERP accounting document number of the invoice.
         data_tests:
           - unique
           - not_null
+      - name: billing_doc
+        description: ERP billing document number. Credit memos reference the invoice through this number.
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - not_null
           - relationships:
@@ -59,33 +77,53 @@ models:
                 to: ref('dim_customer')
                 field: customer_id
       - name: invoice_date
-        description: Fecha de la factura.
+        description: Invoice document date.
         data_tests:
           - not_null
+      - name: due_date
+        description: Payment due date, the baseline date plus the customer's payment terms in days.
       - name: invoice_amount
-        description: Importe total de la factura en la moneda original.
+        description: Total invoice amount in the original currency.
         data_tests:
           - not_null
       - name: currency
-        description: Código de moneda de la factura (ISO 4217).
+        description: Invoice currency code (ISO 4217).
         data_tests:
           - not_null
+      - name: is_cleared
+        description: 1 if the invoice has been cleared in the ERP, 0 if it is still open.
+      - name: clearing_date
+        description: Date the invoice was cleared in the ERP. NULL while open.
+      - name: paid_date
+        description: Date of the last payment applied to the invoice. NULL while open or when it was settled only by credit memos.
+      - name: open_amount
+        description: Amount still open. Equals invoice_amount while open, 0 once cleared.
+      - name: days_late
+        description: Days between due_date and paid_date (cleared invoices) or the cut-off date (open invoices). Negative means paid early or not yet due.
       - name: aging_bucket
-        description: Categoría de antigüedad de la factura según su fecha y la fecha de corte.
+        description: Lateness category based on days_late. cleared, not_due, 1-15, 16-30, 31-60 or 60+ days late.
         data_tests:
           - accepted_values:
               arguments:
                 values: ['cleared', 'not_due', '1-15', '16-30', '31-60', '60+']
   - name: fact_credit_memo
-    description: Una fila por nota de crédito, con cliente, fecha, importe y moneda.
+    description: One row per credit memo, with customer, date, amount and the billing document it refers to.
     columns:
       - name: credit_memo_doc
-        description: Número de documento de la nota de crédito en el ERP.
+        description: ERP accounting document number of the credit memo.
         data_tests:
           - unique
           - not_null
+      - name: billing_doc
+        description: Billing document number of the invoice the credit memo refers to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_invoice')
+                field: billing_doc
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - not_null
           - relationships:
@@ -93,35 +131,31 @@ models:
                 to: ref('dim_customer')
                 field: customer_id
       - name: credit_memo_date
-        description: Fecha de la nota de crédito.
+        description: Credit memo posting date.
         data_tests:
           - not_null
       - name: credit_memo_amount
-        description: Importe total de la nota de crédito en la moneda original.
+        description: Total credit memo amount in the original currency.
         data_tests:
           - not_null
       - name: currency
-        description: Código de moneda de la nota de crédito (ISO 4217).
+        description: Credit memo currency code (ISO 4217).
         data_tests:
           - not_null
-      - name: billing_doc
-        description: Número de documento de facturación asociado a la nota de crédito.
-        data_tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('fact_invoice')
-                field: billing_doc
+      - name: is_cleared
+        description: 1 if the credit memo has been applied (cleared) in the ERP, 0 if it is still open.
+      - name: clearing_date
+        description: Date the credit memo was cleared in the ERP. NULL while open.
   - name: fact_payment
-    description: Una fila por pago.
+    description: One row per customer payment, applied or not yet applied to invoices.
     columns:
       - name: payment_doc
-        description: Número de documento del pago en el ERP.
+        description: ERP accounting document number of the payment.
         data_tests:
           - unique
           - not_null
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - not_null
           - relationships:
@@ -129,63 +163,77 @@ models:
                 to: ref('dim_customer')
                 field: customer_id
       - name: payment_date
-        description: Fecha del pago.
+        description: Payment posting date.
         data_tests:
           - not_null
       - name: payment_amount
-        description: Importe total del pago en la moneda original.
+        description: Total payment amount in the original currency.
         data_tests:
           - not_null
       - name: currency
-        description: Código de moneda del pago (ISO 4217).
+        description: Payment currency code (ISO 4217).
         data_tests:
           - not_null
+      - name: is_cleared
+        description: 1 if the payment has been applied to invoices in the ERP, 0 if it is still unapplied.
+      - name: clearing_date
+        description: Date the payment was applied in the ERP. NULL while unapplied.
   - name: bridge_payment_application
-    description: Una fila por aplicación de pago a factura o nota de crédito, con el documento de compensación.
+    description: One row per application of a payment or credit memo to an invoice, with the amount applied.
     columns:
       - name: application_doc
-        description: Número de documento de compensación en el ERP.
+        description: ERP clearing document that applied the payment or credit memo.
         data_tests:
           - not_null
+      - name: application_type
+        description: Type of document applied, payment or credit_memo.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['payment', 'credit_memo']
       - name: invoice_doc
-        description: Número de documento de la factura aplicada al pago.
+        description: ERP accounting document number of the invoice that received the application.
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('fact_invoice')
                 field: invoice_doc
-      - name: application_type
-        description: Tipo de aplicación (factura o nota de crédito).
-        data_tests:
-          - accepted_values:
-              arguments:
-                values: ['payment', 'credit_memo']
+      - name: customer_id
+        description: ERP customer number as an integer, without leading zeros.
+      - name: application_date
+        description: Posting date of the payment or credit memo being applied.
+      - name: allocated_amount
+        description: Portion of the payment or credit memo applied to this invoice. Summed per invoice, it equals the invoice amount.
       - name: application_rule
-        description: Regla utilizada para determinar la aplicación del pago (one_invoice, one_payment, etc.).
+        description: Rule used to split a clearing document between invoices and payments. One of one_invoice, one_payment, credit_memo or waterfall.
         data_tests:
           - accepted_values:
               arguments:
                 values: [one_invoice, one_payment, credit_memo, waterfall]
   - name: dim_date
-    description: Una fila por fecha
+    description: One row per calendar day, from the start date to the cut-off date.
     columns:
       - name: date_day
-        description: Día de la fecha.
+        description: Calendar day.
         data_tests:
           - not_null
           - unique
+      - name: year_num
+        description: Calendar year of the day.
+      - name: month_num
+        description: Calendar month number of the day, 1 to 12.
       - name: is_month_end
-        description: flag para saber si es el ultimo dia del mes
+        description: 1 if the day is the last day of its month, 0 otherwise.
         data_tests:
           - accepted_values:
               arguments:
                 values: [0, 1]
   - name: fact_ar_snapshot
-    description: una fila por cliente y fecha con los datos de la cartera del cliente en ese momento
+    description: One row per customer and day with the accounts receivable position of the customer at the end of that day.
     columns:
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - not_null
           - relationships:
@@ -193,26 +241,58 @@ models:
                 to: ref('dim_customer')
                 field: customer_id
       - name: snapshot_date
-        description: fecha del snapshot
+        description: Day the position refers to.
         data_tests:
           - not_null
+      - name: invoice_balance
+        description: Sum of the customer's invoices that were still open on snapshot_date.
+      - name: credits_balance
+        description: Sum of the customer's payments and credit memos that were still unapplied on snapshot_date.
+      - name: net_balance
+        description: invoice_balance minus credits_balance. Can be negative when unapplied credits exceed open invoices.
+      - name: overdue_balance
+        description: Part of invoice_balance whose due date was before snapshot_date.
+      - name: overdue_15_balance
+        description: Part of invoice_balance that was more than 15 days past due on snapshot_date.
       - name: credit_limit
-        description: limite de credito del cleinte en el dia del snapshot
+        description: Credit limit in force on snapshot_date, from dim_customer_credit_history.
         data_tests:
           - not_null
   - name: fact_web_order
-    description: Una fila por pedido del e-commerce, con el saldo del cliente ese día y las retenciones aplicadas.
+    description: One row per e-commerce order, with the customer's receivables position on the order date and the holds applied.
     columns:
       - name: order_id
-        description: Identificador del pedido en el e-commerce.
+        description: Order identifier in the e-commerce system.
         data_tests:
           - unique
           - not_null
+      - name: order_number
+        description: Order number shown to the customer.
       - name: customer_id
-        description: Número de cliente del ERP como entero, sin ceros a la izquierda.
+        description: ERP customer number as an integer, without leading zeros.
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_customer')
                 field: customer_id
+      - name: status
+        description: Order status in the e-commerce system, confirmed, held or cancelled.
+      - name: total_amount
+        description: Total order amount.
+      - name: order_date
+        description: Date the order was created.
+      - name: balance_at_order
+        description: Net receivables balance of the customer (net_balance in fact_ar_snapshot) on the order date.
+      - name: overdue_15_balance
+        description: Balance more than 15 days past due on the order date, from fact_ar_snapshot.
+      - name: credit_limit
+        description: Credit limit in force on the order date.
+      - name: was_held_overdue
+        description: 1 if the e-commerce system held the order for overdue balance.
+      - name: was_held_credit_limit
+        description: 1 if the e-commerce system held the order for exceeding the credit limit.
+      - name: was_held_erp_block
+        description: 1 if the e-commerce system held the order because the customer was blocked in the ERP.
+      - name: was_held
+        description: 1 if the order was held for any reason, 0 otherwise.

@@ -7,6 +7,6 @@ select
     rtrim(TABNAME) as table_name,
     rtrim(FNAME) as field_name,
     CHNGIND as change_type,
-    nullif(ltrim(rtrim(VALUE_OLD)), '') as old_value,
-    nullif(ltrim(rtrim(VALUE_NEW)), '') as new_value
+    {{ clean_text('VALUE_OLD') }} as old_value,
+    {{ clean_text('VALUE_NEW') }} as new_value
 from {{ source('bronze', 'erp_cdpos') }}

@@ -54,8 +54,8 @@ with_lateness AS (
     SELECT
         wd.*,
         pd.paid_date,
-        -- días de atraso: pagada = paid_date - due_date; abierta = fecha de corte - due_date.
-        -- negativo = pagó antes de vencer (o aún no vence)
+        -- days late: cleared = paid_date - due_date; open = cut-off date - due_date.
+        -- negative = paid before the due date (or not yet due)
         CASE WHEN
             wd.is_cleared = 1 THEN DATEDIFF(day, wd.due_date, pd.paid_date)
             ELSE DATEDIFF(day, wd.due_date, CAST('{{ var("as_of_date") }}' AS date))
@@ -75,7 +75,7 @@ SELECT
     i.is_cleared,
     i.clearing_date,
     i.paid_date,
-    -- importe que sigue abierto
+    -- amount that is still open
     CASE WHEN
         i.is_cleared = 0 THEN i.invoice_amount
         ELSE 0

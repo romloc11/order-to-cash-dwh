@@ -2,7 +2,7 @@
 select
     id as activity_id,
     partner_id,
-    nullif(ltrim(rtrim(invoice_ref)), '') as invoice_ref,
+    {{ clean_text('invoice_ref') }} as invoice_ref,
     activity_type,
     outcome,
     promised_date,

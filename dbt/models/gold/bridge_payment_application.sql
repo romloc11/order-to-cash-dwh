@@ -1,5 +1,5 @@
 WITH groups AS (
-    -- Paso 1: por cada documento de compensación, cuántas facturas y cuántos pagos tiene
+    -- Step 1: for each clearing document, how many invoices and how many payments it contains
     SELECT
         clearing_document,
         SUM(CASE WHEN document_type = 'RV' THEN 1 ELSE 0 END) AS invoices,
@@ -17,7 +17,7 @@ payments AS (
 ),
 
 one_invoice AS (
-    -- Regla 1: el grupo tiene una sola factura; el importe aplicado es el del PAGO
+    -- Rule 1: the group has a single invoice; the applied amount is the PAYMENT amount
     SELECT
         p.document_number AS application_doc,
         'payment' AS application_type,
@@ -33,7 +33,7 @@ one_invoice AS (
 ),
 
 one_payment AS (
-    -- Regla 2: un solo pago y varias facturas; el importe aplicado es el de la FACTURA
+    -- Rule 2: a single payment and several invoices; the applied amount is the INVOICE amount
     SELECT
         p.document_number AS application_doc,
         'payment' AS application_type,
@@ -49,8 +49,8 @@ one_payment AS (
 ),
 
 invoice_keys AS (
-    -- Paso para la regla 3: el número de documento de cada factura, abierta o compensada,
-    -- junto con su documento de facturación (billing_doc), que es lo que las notas referencian
+    -- Step for rule 3: the document number of every invoice, open or cleared,
+    -- together with its billing document (billing_doc), which is what credit memos reference
     SELECT document_number AS invoice_doc, billing_doc
     FROM {{ ref('erp_open_items') }}
     WHERE document_type = 'RV'
@@ -61,7 +61,7 @@ invoice_keys AS (
 ),
 
 credit_memos AS (
-    -- Regla 3: cada nota de crédito se aplica a la factura que referencia
+    -- Rule 3: each credit memo is applied to the invoice it references
     SELECT
         cm.credit_memo_doc AS application_doc,
         'credit_memo' AS application_type,
