@@ -25,7 +25,7 @@ Everything here runs locally with Docker.
 | Cross-system consistency checks (does the e-commerce follow the ERP's rules?) | `dbt/tests/hold_rule_*` |
 | dbt tests, reconciliation tests and failure storage | `dbt/tests/`, `dbt/models/*/_*.yml` |
 | dbt snapshots for attributes the source does not log | `dbt/snapshots/` |
-| Generated documentation and lineage | [docs/lineage.md](docs/lineage.md) |
+| Generated documentation and lineage | [dbt documentation site](https://romloc11.github.io/order-to-cash-dwh/dbt/), [docs/lineage.md](docs/lineage.md) |
 | Orchestration with Apache Airflow (in progress) | `airflow/` |
 
 ## Architecture
@@ -115,10 +115,11 @@ Build Silver, Gold and the customer snapshot with dbt, and run all the tests:
 docker compose run --rm dbt build
 ```
 
-Generate the documentation site (open `dbt/target/static_index.html`):
+The documentation site is published at <https://romloc11.github.io/order-to-cash-dwh/dbt/> (models, columns, tests, SQL and the lineage graph). To regenerate it locally after changing a model, and refresh the published copy:
 
 ```bash
 docker compose run --rm dbt docs generate --static
+cp dbt/target/static_index.html docs/dbt/index.html
 ```
 
 Start Airflow (UI at <http://localhost:8080>, no login, local use only):
@@ -147,7 +148,6 @@ I used Claude as a tutor and pair programmer, and I want that to be clear.
 
 - **Written by me:** the dbt Gold models (dimensions, facts, the payment application bridge, the daily snapshot and the web-order fact), the shared cleaning macros, the customer snapshot, the singular and reconciliation tests, and four Silver models (`erp_customers`, `erp_customer_credit`, `crm_partners`, `ecommerce_orders`). I can explain every line of them.
 - **Generated or scaffolded by Claude:** the synthetic data generator, the T-SQL control and Bronze layer, the extractor framework, the Docker and Airflow setup, the remaining Silver models, and the column descriptions in the dbt YAML files.
-- **How we worked:** Claude designed the exercises and checked them against the data first, I wrote the code, and Claude reviewed it and pointed out mistakes. Several bugs were caught that way, for example a macro with a wrong date style that silently turned every date into `NULL`; a before/after checksum of the Silver views is what exposed it.
 - **Next:** the Airflow DAGs are mine to write, with Claude reviewing.
 
 ## Roadmap
