@@ -39,6 +39,10 @@ Everything here runs locally with Docker and uses **synthetic data only**. The d
 - CRM and ERP disagreeing on the account owner for some customers.
 - Customer numbers with leading zeros in the ERP and without them in the CRM.
 
+## Data lineage
+
+How the layers connect, and how the Gold tables depend on each other: [docs/lineage.md](docs/lineage.md).
+
 ## Run it
 
 ```bash
