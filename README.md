@@ -1,8 +1,12 @@
-# Receivables Medallion Data Warehouse
+# Order-to-Cash Data Warehouse
 
-A SQL Server data warehouse for accounts receivable, built with a **Bronze / Silver / Gold** (medallion) architecture, transformed with **dbt**, and fed by **three source systems on three different engines**: an ERP (SAP-shaped tables, SQL Server), a CRM (Odoo-shaped tables, PostgreSQL) and an e-commerce database (MariaDB).
+A SQL Server data warehouse built with a **Bronze / Silver / Gold** (medallion) architecture, transformed with **dbt**, and fed by **three source systems on three different engines**: an ERP (SAP-shaped tables, SQL Server), a CRM (Odoo-shaped tables, PostgreSQL) and an e-commerce database (MariaDB).
 
-Everything here runs locally with Docker and uses **synthetic data only**. The design is a generic, simplified version of a warehouse I built and run in production for a credit & collections team.
+It starts with the cash end of order-to-cash, **accounts receivable**; sales and logistics are planned as new marts on the same warehouse.
+
+An **anonymized re-creation** of a data warehouse I built and run at work. It is written from scratch on **fictional, synthetic data**, and it reproduces the architecture, the design patterns and the kinds of problems I faced in the real project (late and partial payments, history that the source does not fully log, systems that disagree). No code, data, names or business rules from my employer are included.
+
+Everything here runs locally with Docker.
 
 > **Status: work in progress.** Sources, Bronze, Silver, Gold, tests and documentation are done. Airflow is installed and running with a health-check DAG; **the next step is the DAG that orchestrates the daily load** (three source loads in parallel, then dbt). See the [roadmap](#roadmap).
 
