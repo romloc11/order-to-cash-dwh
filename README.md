@@ -30,17 +30,7 @@ Everything here runs locally with Docker.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    ERP[("ERP<br/>SQL Server")] --> B["Bronze<br/>raw copies"]
-    CRM[("CRM<br/>PostgreSQL")] --> B
-    ECOM[("E-commerce<br/>MariaDB")] --> B
-    B --> S["Silver<br/>dbt views: clean types, dates, keys"]
-    S --> G["Gold<br/>dbt tables: dimensions, facts, bridge, snapshot"]
-    AF["Airflow<br/>(orchestration, in progress)"] -.-> B
-    AF -.-> S
-    AF -.-> G
-```
+![Architecture: three sources into Bronze, Silver and Gold, with dbt tests and Airflow orchestration in progress](docs/architecture.png)
 
 How the Gold tables depend on each other: [docs/lineage.md](docs/lineage.md).
 
