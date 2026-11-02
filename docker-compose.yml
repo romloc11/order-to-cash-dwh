@@ -109,6 +109,60 @@ services:
       dwh-setup:
         condition: service_completed_successfully
 
+  # Metadata database for Airflow (DAG runs, task states). Separate from the CRM database.
+  airflow-db:
+    image: postgres:16-alpine
+    profiles: ["orchestration"]
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow_local_dev}
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Airflow, the orchestrator. `standalone` runs the API server, the scheduler and the
+  # DAG processor in one container: fine for local development, not for production.
+  # Start it with:  docker compose --profile orchestration up -d airflow
+  # UI: http://localhost:8080 (no login: ALL_ADMINS is for local use only)
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    profiles: ["orchestration"]
+    command: standalone
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD:-airflow_local_dev}@airflow-db:5432/airflow
+      # Passwords the pipeline tasks need (same names as the other services).
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Dwh_Local_Dev_1}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-shop_local_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm_local_dev}
+      DWH_HOST: sqlserver
+      SHOP_HOST: mariadb
+      CRM_HOST: postgres
+      DBT_PROFILES_DIR: /opt/airflow/project/dbt
+      # Keep dbt's logs and build output out of the mounted project folder.
+      DBT_LOG_PATH: /tmp/dbt/logs
+      DBT_TARGET_PATH: /tmp/dbt/target
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./dbt:/opt/airflow/project/dbt
+      - ./extractors:/opt/airflow/project/extractors
+      - ./sql:/opt/airflow/project/sql:ro
+      - airflow-logs:/opt/airflow/logs
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -154,3 +208,5 @@ volumes:
   mssql-data:
   pg-data:
   maria-data:
+  airflow-db-data:
+  airflow-logs:
