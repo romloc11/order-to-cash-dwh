@@ -1,0 +1,21 @@
+version: 2
+
+snapshots:
+  - name: customers_snapshot
+    description: >
+      History of customer name, tax ID and account group, which the ERP change log does not record.
+      History starts on the first run of the snapshot; earlier changes cannot be recovered.
+      Each run adds a new version only when one of the tracked columns has changed.
+    columns:
+      - name: customer_id
+        description: ERP customer number as an integer, without leading zeros.
+      - name: customer_name
+        description: Customer name in this version.
+      - name: tax_id
+        description: Customer tax ID in this version. NULL when the ERP has none.
+      - name: account_group
+        description: Account group in this version, CUST (regular customer) or DELV (delivery account).
+      - name: dbt_valid_from
+        description: Timestamp of the snapshot run that first saw this version.
+      - name: dbt_valid_to
+        description: Timestamp of the snapshot run that replaced this version. NULL means it is the current version.

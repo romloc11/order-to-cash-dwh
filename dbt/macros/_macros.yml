@@ -1,0 +1,15 @@
+version: 2
+
+macros:
+  - name: sap_date
+    description: Converts an SAP date stored as text (YYYYMMDD) to a date. Returns NULL if the value cannot be converted.
+    arguments:
+      - name: column
+        type: string
+        description: Name of the column to convert.
+  - name: clean_text
+    description: Trims leading and trailing spaces and turns empty text into NULL.
+    arguments:
+      - name: column
+        type: string
+        description: Name of the text column to clean.
