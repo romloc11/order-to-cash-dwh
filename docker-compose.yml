@@ -159,6 +159,7 @@ services:
       - ./extractors:/opt/airflow/project/extractors
       - ./sql:/opt/airflow/project/sql:ro
       - airflow-logs:/opt/airflow/logs
+      - ./tests:/opt/airflow/project/tests:ro
     depends_on:
       airflow-db:
         condition: service_healthy
