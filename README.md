@@ -1,5 +1,7 @@
 # Order-to-Cash Data Warehouse
 
+[![CI](https://github.com/romloc11/order-to-cash-dwh/actions/workflows/ci.yml/badge.svg)](https://github.com/romloc11/order-to-cash-dwh/actions/workflows/ci.yml)
+
 A SQL Server data warehouse built with a **Bronze / Silver / Gold** (medallion) architecture, transformed with **dbt**, and fed by **three source systems on three different engines**: an ERP (SAP-shaped tables, SQL Server), a CRM (Odoo-shaped tables, PostgreSQL) and an e-commerce database (MariaDB).
 
 It starts with the cash end of order-to-cash, **accounts receivable**; sales and logistics are planned as new marts on the same warehouse.
@@ -8,7 +10,7 @@ An **anonymized re-creation** of a data warehouse I built and run at work. It is
 
 Everything here runs locally with Docker.
 
-> **Status: work in progress.** Sources, Bronze, Silver, Gold, tests and documentation are done. Airflow is installed and running with a health-check DAG; **the next step is the DAG that orchestrates the daily load** (three source loads in parallel, then dbt). See the [roadmap](#roadmap).
+> **Status: the core pipeline is complete.** Sources, Bronze, Silver, Gold, tests and documentation are done, and an Airflow DAG runs the daily load on a schedule: three source loads in parallel, a gate on all of them, then `dbt snapshot` and `dbt build`. Airflow runs locally in Docker; in production it would run on an always-on server. What is still open is in the [roadmap](#roadmap).
 
 ## What it demonstrates
 
@@ -26,11 +28,12 @@ Everything here runs locally with Docker.
 | dbt tests, reconciliation tests and failure storage | `dbt/tests/`, `dbt/models/*/_*.yml` |
 | dbt snapshots for attributes the source does not log | `dbt/snapshots/` |
 | Generated documentation and lineage | [dbt documentation site](https://romloc11.github.io/order-to-cash-dwh/dbt/), [docs/lineage.md](docs/lineage.md) |
-| Orchestration with Apache Airflow (in progress) | `airflow/` |
+| Orchestration with Apache Airflow: parallel loads, source gate, dbt, retries, failure alerts, daily schedule | `airflow/dags/` |
+| DAG structure tests (pytest) and CI with GitHub Actions | `tests/`, `.github/workflows/ci.yml` |
 
 ## Architecture
 
-![Architecture: three sources into Bronze, Silver and Gold, with dbt tests and Airflow orchestration in progress](docs/architecture.png)
+![Architecture: three sources into Bronze, Silver and Gold, with dbt tests and Airflow orchestration](docs/architecture.png)
 
 How the Gold tables depend on each other: [docs/lineage.md](docs/lineage.md).
 
@@ -91,7 +94,7 @@ docker compose up -d --build  # generates data, loads the three sources, creates
 
 SQL Server listens on `localhost:1433` (user `sa`), PostgreSQL on `localhost:5432` (database `crm`, user `crm`) and MariaDB on `localhost:3306` (database `ecommerce`, user `root`).
 
-Load Bronze (today by hand; the Airflow DAG will replace these steps):
+Load Bronze by hand (the Airflow DAG below runs these same steps):
 
 ```bash
 docker compose exec sqlserver bash -c '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d dwh -Q "EXEC bronze.load_erp"'
@@ -118,6 +121,28 @@ Start Airflow (UI at <http://localhost:8080>, no login, local use only):
 docker compose --profile orchestration up -d airflow
 ```
 
+The `dwh_daily_load` DAG runs every day at 06:00 UTC, and you can trigger it from the UI at any time:
+
+```
+load_erp ──┐
+load_crm ──┼──> loads_done ──> verify_sources ──> dbt_snapshot ──> dbt_build
+load_ecommerce ┘
+```
+
+- The three loads run in parallel and are retried twice, 30 seconds apart. They are idempotent, so a retry cannot duplicate data. The dbt steps are not retried, because a failing data test would fail again.
+- `verify_sources` calls `control.verify_sources`, which reads the load log. It fails if a source has no successful load in the last 26 hours.
+- If a task fails after its retries, a line is written to `dwh_alerts.log` in the Airflow logs volume (a stand-in for a Slack or email alert).
+- With the default `all_success` rule, a failed load stops everything after it, so Gold never mixes fresh data from one source with older data from another.
+
+Run the DAG tests (they parse the DAG files and check the shape of the graph; no task is executed). `pytest` is installed inside the container and is lost when the container is recreated:
+
+```bash
+docker compose exec airflow python -m pip install pytest
+docker compose exec -e DAGS_FOLDER=/opt/airflow/dags airflow python -m pytest /opt/airflow/project/tests -q -p no:cacheprovider
+```
+
+The same tests run on GitHub Actions on every push to `main` and on every pull request.
+
 To regenerate the data with different settings:
 
 ```bash
@@ -131,6 +156,9 @@ python -m data_generator.generate --customers 500 --seed 42 --out data_generator
 - **A daily snapshot at customer-day grain.** It makes "what was this customer's balance and credit limit on that day?" a simple lookup, and lets other systems be checked against the ERP on any past date.
 - **Business rules are tested, not stored as columns.** The rule "this order should have been held" lives in tests that compare against what the e-commerce did, rather than in a column of the fact table.
 - **dbt and the extractors live in their own virtualenv inside the Airflow image**, so their dependencies never clash with Airflow's.
+- **A gate that reads results, not task colors.** A green task only means the process ended without an error. While building the DAG, the ERP load showed green in Airflow without writing its load log; the rows only appeared once the procedure's result sets were consumed (`cursor.nextset()`) before the commit. `control.verify_sources` checks the recorded result of each load, so a silent failure stops Gold.
+- **Stop on failure instead of using yesterday's data.** If a load fails after its retries, nothing downstream runs. The alternative (run the gate anyway and accept a recent-enough load) was tested and lets Gold run on one stale source without anyone noticing.
+- **Loads do not use the run's logical date.** Each one loads whatever is new (the ERP procedure re-reads a 7-day window), so a backfill of past days would just repeat today's load. A full ERP reload is available through the procedure's `@full_reload` parameter.
 
 ## How this was built
 
@@ -138,7 +166,6 @@ I used Claude as a tutor and pair programmer, and I want that to be clear.
 
 - **Written by me:** the dbt Gold models (dimensions, facts, the payment application bridge, the daily snapshot and the web-order fact), the shared cleaning macros, the customer snapshot, the singular and reconciliation tests, and four Silver models (`erp_customers`, `erp_customer_credit`, `crm_partners`, `ecommerce_orders`). I can explain every line of them.
 - **Generated or scaffolded by Claude:** the synthetic data generator, the T-SQL control and Bronze layer, the extractor framework, the Docker and Airflow setup, the remaining Silver models, and the column descriptions in the dbt YAML files.
-- **Next:** the Airflow DAGs are mine to write, with Claude reviewing.
 
 ## Roadmap
 
@@ -150,8 +177,9 @@ I used Claude as a tutor and pair programmer, and I want that to be clear.
 - [x] Data tests, reconciliation tests and stored failures
 - [x] dbt snapshots, macros and generated documentation
 - [x] Airflow running in Docker with a health-check DAG
-- [ ] **Airflow DAG for the daily load: three loads in parallel, gate on all of them, then `dbt snapshot` and `dbt build`** (next)
-- [ ] Retries, failure handling and scheduling with backfills
+- [x] Airflow DAG for the daily load: three loads in parallel, gate on all of them, then `dbt snapshot` and `dbt build`
+- [x] Retries, failure alerts and a daily schedule
+- [x] DAG structure tests (pytest)
+- [x] CI with GitHub Actions (runs the DAG tests)
 - [ ] Python tests against the generator's ground truth
-- [ ] CI with GitHub Actions
 - [ ] More business areas as new Gold marts (sales, logistics)
